@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tempo 调度控制台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M9 16h4l3-7 4 14 3-7h0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --border: #e3e6ef;
+    --text: #1c2030;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --green: #12805c;
+    --green-soft: #e6f6ef;
+    --red: #c0342f;
+    --red-soft: #fdeceb;
+    --amber: #a16207;
+    --amber-soft: #fdf3dd;
+    --blue: #1d4ed8;
+    --blue-soft: #e8efff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand b { font-size: 18px; letter-spacing: .3px; }
+  .brand span { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; margin-left: 12px; }
+  nav button {
+    border: 1px solid transparent; background: transparent; color: var(--muted);
+    padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav button:hover { color: var(--text); }
+  .spacer { flex: 1; }
+  .pill {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  main { padding: 20px 24px 60px; max-width: 1320px; margin: 0 auto; }
+  .grid { display: grid; gap: 14px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; }
+  .card .value { font-size: 24px; font-weight: 650; margin-top: 4px; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  section { display: none; }
+  section.active { display: block; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; margin-top: 16px;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .panel-head h2 { font-size: 14px; margin: 0; font-weight: 650; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left; padding: 10px 14px; font-size: 13px;
+    border-bottom: 1px solid #f0f2f7; vertical-align: middle;
+  }
+  th { color: var(--muted); font-weight: 500; background: #fbfcfe; }
+  tbody tr:hover { background: #fafbff; }
+  tbody tr:last-child td { border-bottom: none; }
+  .mono { font-family: "SFMono-Regular", Consolas, "Courier New", monospace; font-size: 12px; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 550; white-space: nowrap;
+  }
+  .b-SUCCEEDED { background: var(--green-soft); color: var(--green); }
+  .b-RUNNING { background: var(--blue-soft); color: var(--blue); }
+  .b-PENDING { background: var(--amber-soft); color: var(--amber); }
+  .b-DEAD, .b-FAILED { background: var(--red-soft); color: var(--red); }
+  .b-CANCELLED { background: #eef0f4; color: var(--muted); }
+  .b-ONLINE, .b-ENABLED { background: var(--green-soft); color: var(--green); }
+  .b-PAUSED { background: #eef0f4; color: var(--muted); }
+  .b-OFFLINE { background: #eef0f4; color: var(--muted); }
+  button.btn {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12.5px;
+  }
+  button.btn:hover { border-color: #c9cede; }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.btn.primary:hover { background: #4338ca; }
+  button.btn.danger { color: var(--red); border-color: #f2cdca; }
+  button.btn.tiny { padding: 3px 9px; font-size: 12px; }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  input, select, textarea {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font: inherit; background: #fff; color: var(--text); outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  label.field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); }
+  label.field input, label.field select, label.field textarea { color: var(--text); }
+  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .form-grid .wide { grid-column: 1 / -1; }
+  .muted { color: var(--muted); }
+  .empty { padding: 34px 16px; text-align: center; color: var(--muted); }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(18,22,38,.38);
+    display: none; align-items: flex-start; justify-content: center; z-index: 50; padding: 6vh 16px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: 14px; width: min(760px, 100%);
+    max-height: 88vh; overflow: auto; border: 1px solid var(--border);
+    box-shadow: 0 24px 60px rgba(20,24,45,.18);
+  }
+  .modal-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-body { padding: 18px 20px; }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .toast {
+    position: fixed; right: 22px; bottom: 22px; z-index: 80;
+    background: #1c2030; color: #fff; padding: 11px 16px; border-radius: 10px;
+    font-size: 13px; opacity: 0; transform: translateY(8px); transition: .18s;
+    max-width: 420px;
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.err { background: #8f2420; }
+  .kv { display: grid; grid-template-columns: 128px 1fr; gap: 8px 14px; font-size: 13px; }
+  .kv span.k { color: var(--muted); }
+  pre.log {
+    background: #f7f8fc; border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; font-size: 12px; line-height: 1.6; overflow: auto; max-height: 320px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .login {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .login .card { width: min(400px, 92vw); padding: 24px; }
+  .login h1 { font-size: 19px; margin: 0 0 6px; }
+  .login p { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .login input { width: 100%; margin-bottom: 10px; }
+  .login button { width: 100%; }
+  .flex { display: flex; gap: 8px; align-items: center; }
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .ev { display: flex; gap: 12px; padding: 9px 4px; border-bottom: 1px dashed #eef0f6; font-size: 13px; }
+  .ev:last-child { border-bottom: none; }
+  .ev .t { color: var(--muted); width: 150px; flex: none; font-size: 12px; }
+  .ev .ty { width: 190px; flex: none; font-weight: 550; font-size: 12.5px; }
+  @media (max-width: 720px) {
+    header { flex-wrap: wrap; }
+    .form-grid { grid-template-columns: 1fr; }
+    .kv { grid-template-columns: 96px 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+  <div class="card">
+    <h1>Tempo 调度控制台</h1>
+    <p>请输入 API Key（默认引导密钥见 README：<span class="mono">tempo-admin-token</span>）</p>
+    <input id="tokenInput" type="password" placeholder="tk_... 或 bootstrap token" />
+    <button class="btn primary" onclick="saveToken()">进入控制台</button>
+    <p class="muted" style="margin-top:12px">密钥仅保存在本机 localStorage。</p>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div class="brand"><b>Tempo</b><span>分布式任务调度平台</span></div>
+    <nav>
+      <button data-tab="overview" class="active">概览</button>
+      <button data-tab="jobs">任务</button>
+      <button data-tab="runs">运行记录</button>
+      <button data-tab="workers">执行器</button>
+      <button data-tab="events">事件</button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="pill" id="leaderPill">—</span>
+    <button class="btn tiny" onclick="refreshAll()">刷新</button>
+    <button class="btn tiny" onclick="logout()">退出</button>
+  </header>
+
+  <main>
+    <!-- 概览 -->
+    <section id="tab-overview" class="active">
+      <div class="grid cards" id="statCards"></div>
+      <div class="panel">
+        <div class="panel-head"><h2>执行成功率（近 24h）</h2><span class="muted" id="rateHint"></span></div>
+        <div class="panel-body" style="padding:18px 16px">
+          <div style="height:8px;background:#eef0f6;border-radius:99px;overflow:hidden">
+            <div id="rateBar" style="height:100%;width:0;background:#12805c;transition:width .4s"></div>
+          </div>
+          <div class="flex" style="justify-content:space-between;margin-top:8px" class="muted">
+            <span class="muted mono" id="rateLabel">—</span>
+            <span class="muted mono" id="queueLabel">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>最近运行</h2></div>
+        <div id="recentRuns"></div>
+      </div>
+    </section>
+
+    <!-- 任务 -->
+    <section id="tab-jobs">
+      <div class="toolbar">
+        <input id="jobSearch" placeholder="搜索任务名…" style="width:240px" oninput="renderJobs()" />
+        <button class="btn primary" onclick="openCreate()">+ 新建任务</button>
+        <span class="spacer"></span>
+        <span class="muted" id="jobCount"></span>
+      </div>
+      <div class="panel"><div id="jobTable"></div></div>
+    </section>
+
+    <!-- 运行记录 -->
+    <section id="tab-runs">
+      <div class="toolbar">
+        <select id="runStatus" onchange="loadRuns()">
+          <option value="">全部状态</option>
+          <option>PENDING</option><option>RUNNING</option>
+          <option>SUCCEEDED</option><option>DEAD</option><option>CANCELLED</option>
+        </select>
+        <select id="runJob" onchange="loadRuns()"><option value="">全部任务</option></select>
+        <span class="muted" id="runCount"></span>
+      </div>
+      <div class="panel"><div id="runTable"></div></div>
+    </section>
+
+    <!-- 执行器 -->
+    <section id="tab-workers">
+      <div class="panel"><div id="workerTable"></div></div>
+    </section>
+
+    <!-- 事件 -->
+    <section id="tab-events">
+      <div class="panel">
+        <div class="panel-head"><h2>事件流</h2><span class="muted">状态机每次流转都会落一条事件</span></div>
+        <div id="eventList" style="padding:8px 16px"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 新建任务 -->
+<div class="overlay" id="createOverlay">
+  <div class="modal">
+    <div class="modal-head"><b>新建任务</b><button class="btn tiny" onclick="closeCreate()">关闭</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label class="field">任务名 <input id="f_name" placeholder="nightly-report" /> </label>
+        <label class="field">调度类型
+          <select id="f_schedule" onchange="syncScheduleFields()">
+            <option value="cron">cron</option>
+            <option value="interval">interval（固定间隔）</option>
+            <option value="once">once（一次性）</option>
+          </select>
+        </label>
+        <label class="field" id="wrap_cron">cron 表达式 <input id="f_cron" value="*/5 * * * *" class="mono" /></label>
+        <label class="field" id="wrap_interval" style="display:none">间隔秒数 <input id="f_interval" type="number" value="300" /></label>
+        <label class="field" id="wrap_runat" style="display:none">执行时间（带时区）<input id="f_runat" placeholder="2026-12-01T09:00:00+08:00" class="mono" /></label>
+        <label class="field">时区 <input id="f_tz" value="Asia/Shanghai" /></label>
+        <label class="field">执行器
+          <select id="f_exec" onchange="syncExecFields()">
+            <option value="shell">shell</option>
+            <option value="http">http</option>
+          </select>
+        </label>
+        <label class="field" id="wrap_cmd">命令 <input id="f_cmd" value='echo "shard=$TEMPO_SHARD_INDEX"' class="mono" /></label>
+        <label class="field" id="wrap_url" style="display:none">URL <input id="f_url" placeholder="https://example.com/hook" class="mono" /></label>
+        <label class="field">分片数 <input id="f_shards" type="number" value="1" min="1" max="200" /></label>
+        <label class="field">单任务并发上限 <input id="f_conc" type="number" value="1" min="0" max="100" /></label>
+        <label class="field">最大尝试次数 <input id="f_attempts" type="number" value="3" min="1" /></label>
+        <label class="field">超时（秒）<input id="f_timeout" type="number" value="60" min="1" /></label>
+        <label class="field">补偿策略
+          <select id="f_catchup">
+            <option value="skip">skip（只补最近一期）</option>
+            <option value="all">all（逐期补齐）</option>
+          </select>
+        </label>
+        <label class="field wide">描述 <input id="f_desc" placeholder="可选" /></label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeCreate()">取消</button>
+      <button class="btn primary" onclick="submitCreate()">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情 -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-head"><b>运行详情</b><button class="btn tiny" onclick="closeDetail()">关闭</button></div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const state = { token: localStorage.getItem("tempo_token") || "", tab: "overview",
+  jobs: [], runs: [], workers: [], events: [], stats: null, timer: null };
+
+function toast(msg, isErr) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isErr ? " err" : "");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = "toast"; }, 3200);
+}
+
+async function api(path, options = {}) {
+  const opts = Object.assign({ headers: {} }, options);
+  opts.headers["Authorization"] = "Bearer " + state.token;
+  if (opts.body && typeof opts.body !== "string") {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(opts.body);
+  }
+  const res = await fetch(path, opts);
+  if (res.status === 401) { logout(); throw new Error("认证失败，请重新输入 API Key"); }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
+  if (!res.ok) {
+    const detail = data && data.detail;
+    throw new Error(typeof detail === "string" ? detail : (detail ? JSON.stringify(detail) : ("HTTP " + res.status)));
+  }
+  return data;
+}
+
+function fmtTime(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d)) return value;
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function relTime(value) {
+  if (!value) return "—";
+  const diff = (Date.now() - new Date(value).getTime()) / 1000;
+  if (diff < 60) return Math.max(0, Math.round(diff)) + "s 前";
+  if (diff < 3600) return Math.round(diff/60) + "m 前";
+  if (diff < 86400) return Math.round(diff/3600) + "h 前";
+  return Math.round(diff/86400) + "d 前";
+}
+function esc(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function badge(status) { return `<span class="badge b-${esc(status)}">${esc(status)}</span>`; }
+function jobName(id) {
+  const job = state.jobs.find(j => j.id === id);
+  return job ? job.name : (id || "").slice(0, 8);
+}
+
+function saveToken() {
+  const value = document.getElementById("tokenInput").value.trim();
+  if (!value) { toast("请输入 API Key", true); return; }
+  state.token = value;
+  localStorage.setItem("tempo_token", value);
+  boot();
+}
+function logout() {
+  localStorage.removeItem("tempo_token");
+  state.token = "";
+  document.getElementById("app").style.display = "none";
+  document.getElementById("login").style.display = "flex";
+  if (state.timer) clearInterval(state.timer);
+}
+
+async function boot() {
+  try {
+    const stats = await api("/api/v1/stats");
+    state.stats = stats;
+    document.getElementById("login").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    await refreshAll();
+    if (state.timer) clearInterval(state.timer);
+    state.timer = setInterval(() => { if (!document.hidden) refreshAll(true); }, 5000);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function refreshAll(silent) {
+  try {
+    const [stats, jobs, workers, events] = await Promise.all([
+      api("/api/v1/stats"),
+      api("/api/v1/jobs?page_size=100"),
+      api("/api/v1/workers"),
+      api("/api/v1/events?limit=40"),
+    ]);
+    state.stats = stats; state.jobs = jobs.items; state.workers = workers; state.events = events.items;
+    renderStats(); renderJobs(); renderWorkers(); renderEvents(); fillJobFilter();
+    await loadRuns(silent);
+  } catch (err) { if (!silent) toast(err.message, true); }
+}
+
+async function loadRuns(silent) {
+  const status = document.getElementById("runStatus").value;
+  const jobId = document.getElementById("runJob").value;
+  const params = new URLSearchParams({ page_size: "40" });
+  if (status) params.set("status", status);
+  if (jobId) params.set("job_id", jobId);
+  const data = await api("/api/v1/runs?" + params.toString());
+  state.runs = data.items;
+  document.getElementById("runCount").textContent = `共 ${data.total} 条`;
+  renderRuns();
+  renderRecent();
+}
+
+function renderStats() {
+  const s = state.stats;
+  if (!s) return;
+  const rate = s.last_24h.success_rate;
+  document.getElementById("statCards").innerHTML = `
+    <div class="card"><div class="label">任务定义</div><div class="value">${s.jobs.total}</div><div class="sub">启用 ${s.jobs.enabled}</div></div>
+    <div class="card"><div class="label">待执行</div><div class="value">${s.tasks.pending}</div><div class="sub">含重试等待</div></div>
+    <div class="card"><div class="label">执行中</div><div class="value">${s.tasks.running}</div><div class="sub">在线执行器 ${s.workers.online}</div></div>
+    <div class="card"><div class="label">死信</div><div class="value" style="color:${s.tasks.dead ? "var(--red)" : "inherit"}">${s.tasks.dead}</div><div class="sub">可手工重放</div></div>
+    <div class="card"><div class="label">24h 成功率</div><div class="value">${rate == null ? "—" : rate + "%"}</div><div class="sub">成功 ${s.last_24h.succeeded} / 失败 ${s.last_24h.failed}</div></div>
+  `;
+  document.getElementById("rateBar").style.width = (rate || 0) + "%";
+  document.getElementById("rateBar").style.background = rate == null ? "#c9cede" : (rate >= 95 ? "#12805c" : rate >= 80 ? "#a16207" : "#c0342f");
+  document.getElementById("rateLabel").textContent = rate == null ? "近 24h 暂无完成的任务" : `成功 ${s.last_24h.succeeded} 条，失败 ${s.last_24h.failed} 条`;
+  document.getElementById("queueLabel").textContent = `队列 ${s.tasks.pending} · 并发容量 ${s.workers.capacity}`;
+  document.getElementById("leaderPill").textContent = s.leader.holder
+    ? `主节点 ${s.leader.holder.split("-").slice(-2).join("-")} · f${s.leader.fencing_token}`
+    : "无主节点";
+}
+
+function scheduleText(job) {
+  if (job.schedule_type === "cron") return "cron " + job.cron_expr;
+  if (job.schedule_type === "interval") return "每 " + job.interval_seconds + "s";
+  return "一次 " + fmtTime(job.run_at);
+}
+
+function renderJobs() {
+  const keyword = document.getElementById("jobSearch").value.trim().toLowerCase();
+  const rows = state.jobs.filter(j => !keyword || j.name.toLowerCase().includes(keyword) || (j.description||"").toLowerCase().includes(keyword));
+  document.getElementById("jobCount").textContent = `共 ${rows.length} 个任务`;
+  if (!rows.length) { document.getElementById("jobTable").innerHTML = `<div class="empty">还没有任务，点击右上角新建</div>`; return; }
+  document.getElementById("jobTable").innerHTML = `
+    <table><thead><tr>
+      <th>任务</th><th>调度</th><th>执行体</th><th>分片/并发</th><th>下次触发</th><th>状态</th><th style="width:220px">操作</th>
+    </tr></thead><tbody>
+    ${rows.map(j => `
+      <tr>
+        <td><div style="font-weight:600">${esc(j.name)}</div><div class="muted mono">${esc(j.id.slice(0,8))} · v${j.version}</div></td>
+        <td><div class="mono">${esc(scheduleText(j))}</div><div class="muted">${esc(j.timezone)} · ${j.catch_up}</div></td>
+        <td><div class="mono">${esc(j.executor)}</div><div class="muted mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(j.executor === "http" ? j.http_url : j.command)}</div></td>
+        <td>${j.shard_count} / ${j.max_concurrency || "∞"}</td>
+        <td class="mono">${j.enabled ? fmtTime(j.next_fire_at) : "已暂停"}</td>
+        <td><span class="badge ${j.enabled ? "b-ENABLED" : "b-PAUSED"}">${j.enabled ? "启用中" : "已暂停"}</span></td>
+        <td><div class="row-actions">
+          <button class="btn tiny" onclick="triggerJob('${j.id}')">立即执行</button>
+          <button class="btn tiny" onclick="toggleJob('${j.id}', ${!j.enabled})">${j.enabled ? "暂停" : "恢复"}</button>
+          <button class="btn tiny danger" onclick="deleteJob('${j.id}')">删除</button>
+        </div></td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
+function renderRuns() {
+  if (!state.runs.length) { document.getElementById("runTable").innerHTML = `<div class="empty">暂无运行记录</div>`; return; }
+  document.getElementById("runTable").innerHTML = `
+    <table><thead><tr>
+      <th>任务</th><th>分片</th><th>状态</th><th>尝试</th><th>执行器</th><th>耗时</th><th>结束时间</th><th></th>
+    </tr></thead><tbody>
+    ${state.runs.map(t => `
+      <tr>
+        <td><div style="font-weight:550">${esc(jobName(t.job_id))}</div><div class="muted mono">${esc(t.id.slice(0,8))}</div></td>
+        <td class="mono">${t.shard_index + 1}/${t.shard_total}</td>
+        <td>${badge(t.status)}</td>
+        <td>${t.attempt || 0}/${t.max_attempts}</td>
+        <td class="mono">${esc(t.worker_id || "—")}</td>
+        <td>${t.duration_ms == null ? "—" : t.duration_ms + "ms"}</td>
+        <td class="mono">${t.finished_at ? relTime(t.finished_at) : "—"}</td>
+        <td><button class="btn tiny" onclick="openDetail('${t.id}')">详情</button></td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
+function renderRecent() {
+  const rows = state.runs.slice(0, 8);
+  if (!rows.length) { document.getElementById("recentRuns").innerHTML = `<div class="empty">暂无数据</div>`; return; }
+  document.getElementById("recentRuns").innerHTML = `
+    <table><tbody>
+    ${rows.map(t => `
+      <tr onclick="openDetail('${t.id}')" style="cursor:pointer">
+        <td style="width:34%"><b>${esc(jobName(t.job_id))}</b> <span class="muted mono">#${t.shard_index + 1}</span></td>
+        <td>${badge(t.status)}</td>
+        <td class="muted mono">${t.duration_ms == null ? "—" : t.duration_ms + "ms"}</td>
+        <td class="muted mono" style="text-align:right">${relTime(t.finished_at || t.created_at)}</td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
+function renderWorkers() {
+  if (!state.workers.length) { document.getElementById("workerTable").innerHTML = `<div class="empty">还没有执行器上线</div>`; return; }
+  document.getElementById("workerTable").innerHTML = `
+    <table><thead><tr><th>执行器</th><th>主机</th><th>分组</th><th>状态</th><th>容量</th><th>最后心跳</th></tr></thead><tbody>
+    ${state.workers.map(w => `
+      <tr><td class="mono">${esc(w.id)}</td><td>${esc(w.hostname)}</td><td>${esc(w.pool)}</td>
+      <td>${badge(w.status)}</td><td>${w.capacity}</td><td class="mono">${relTime(w.last_heartbeat_at)}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+function renderEvents() {
+  if (!state.events.length) { document.getElementById("eventList").innerHTML = `<div class="empty">暂无事件</div>`; return; }
+  document.getElementById("eventList").innerHTML = `<div class="timeline">${state.events.map(e => `
+    <div class="ev">
+      <div class="t mono">${fmtTime(e.created_at)}</div>
+      <div class="ty mono">${esc(e.type)}</div>
+      <div class="muted mono" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        ${esc(e.job_id ? jobName(e.job_id) : "")} ${esc(e.task_id ? "#" + e.task_id.slice(0,8) : "")}
+        ${esc(JSON.stringify(e.payload || {}))}
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function fillJobFilter() {
+  const sel = document.getElementById("runJob");
+  const current = sel.value;
+  sel.innerHTML = `<option value="">全部任务</option>` +
+    state.jobs.map(j => `<option value="${j.id}">${esc(j.name)}</option>`).join("");
+  sel.value = current;
+}
+
+async function triggerJob(id) {
+  try {
+    const tasks = await api(`/api/v1/jobs/${id}/run`, { method: "POST", body: {} });
+    toast(`已投递 ${tasks.length} 个任务实例`);
+    setTimeout(() => refreshAll(true), 700);
+  } catch (err) { toast(err.message, true); }
+}
+async function toggleJob(id, enable) {
+  try {
+    await api(`/api/v1/jobs/${id}/${enable ? "resume" : "pause"}`, { method: "POST" });
+    toast(enable ? "已恢复调度" : "已暂停调度");
+    refreshAll(true);
+  } catch (err) { toast(err.message, true); }
+}
+async function deleteJob(id) {
+  if (!confirm("确认删除该任务？历史运行记录会保留，但不再产生新实例。")) return;
+  try { await api(`/api/v1/jobs/${id}`, { method: "DELETE" }); toast("任务已删除"); refreshAll(true); }
+  catch (err) { toast(err.message, true); }
+}
+
+function openCreate() { document.getElementById("createOverlay").classList.add("show"); }
+function closeCreate() { document.getElementById("createOverlay").classList.remove("show"); }
+function syncScheduleFields() {
+  const type = document.getElementById("f_schedule").value;
+  document.getElementById("wrap_cron").style.display = type === "cron" ? "flex" : "none";
+  document.getElementById("wrap_interval").style.display = type === "interval" ? "flex" : "none";
+  document.getElementById("wrap_runat").style.display = type === "once" ? "flex" : "none";
+}
+function syncExecFields() {
+  const exec = document.getElementById("f_exec").value;
+  document.getElementById("wrap_cmd").style.display = exec === "shell" ? "flex" : "none";
+  document.getElementById("wrap_url").style.display = exec === "http" ? "flex" : "none";
+}
+
+async function submitCreate() {
+  const type = document.getElementById("f_schedule").value;
+  const body = {
+    name: document.getElementById("f_name").value.trim(),
+    description: document.getElementById("f_desc").value.trim(),
+    schedule_type: type,
+    timezone: document.getElementById("f_tz").value.trim() || "UTC",
+    executor: document.getElementById("f_exec").value,
+    shard_count: Number(document.getElementById("f_shards").value) || 1,
+    max_concurrency: Number(document.getElementById("f_conc").value) || 0,
+    max_attempts: Number(document.getElementById("f_attempts").value) || 1,
+    timeout_seconds: Number(document.getElementById("f_timeout").value) || 60,
+    catch_up: document.getElementById("f_catchup").value,
+    payload: {},
+  };
+  if (!body.name) { toast("任务名不能为空", true); return; }
+  if (type === "cron") body.cron_expr = document.getElementById("f_cron").value.trim();
+  if (type === "interval") body.interval_seconds = Number(document.getElementById("f_interval").value) || 60;
+  if (type === "once") body.run_at = document.getElementById("f_runat").value.trim();
+  if (body.executor === "shell") body.command = document.getElementById("f_cmd").value;
+  if (body.executor === "http") body.http_url = document.getElementById("f_url").value.trim();
+  try {
+    await api("/api/v1/jobs", { method: "POST", body });
+    toast("任务已创建");
+    closeCreate();
+    refreshAll(true);
+  } catch (err) { toast(err.message, true); }
+}
+
+async function openDetail(id) {
+  try {
+    const t = await api(`/api/v1/runs/${id}`);
+    document.getElementById("detailBody").innerHTML = `
+      <div class="kv">
+        <span class="k">任务</span><span>${esc(jobName(t.job_id))}</span>
+        <span class="k">状态</span><span>${badge(t.status)}</span>
+        <span class="k">分片</span><span>${t.shard_index + 1} / ${t.shard_total}</span>
+        <span class="k">尝试</span><span>${t.attempt} / ${t.max_attempts}</span>
+        <span class="k">执行器</span><span class="mono">${esc(t.worker_id || "—")}</span>
+        <span class="k">触发时间</span><span class="mono">${fmtTime(t.fire_time)}</span>
+        <span class="k">开始 / 结束</span><span class="mono">${fmtTime(t.started_at)} → ${fmtTime(t.finished_at)}</span>
+        <span class="k">耗时</span><span>${t.duration_ms == null ? "—" : t.duration_ms + " ms"}</span>
+        <span class="k">退出码</span><span class="mono">${t.exit_code == null ? "—" : t.exit_code}</span>
+        <span class="k">幂等键</span><span class="mono" style="word-break:break-all">${esc(t.idempotency_key)}</span>
+        <span class="k">错误</span><span style="color:var(--red)">${esc(t.error || "—")}</span>
+      </div>
+      <div style="margin-top:14px"><div class="muted" style="margin-bottom:6px">输出（截断至 8KB）</div>
+      <pre class="log">${esc(t.output || "(无输出)")}</pre></div>
+      <div class="modal-foot" style="padding:14px 0 0">
+        ${["DEAD","FAILED","CANCELLED"].includes(t.status) ? `<button class="btn" onclick="replayRun('${t.id}')">重放</button>` : ""}
+        ${["PENDING","RUNNING"].includes(t.status) ? `<button class="btn danger" onclick="cancelRun('${t.id}')">取消</button>` : ""}
+      </div>`;
+    document.getElementById("detailOverlay").classList.add("show");
+  } catch (err) { toast(err.message, true); }
+}
+function closeDetail() { document.getElementById("detailOverlay").classList.remove("show"); }
+
+async function replayRun(id) {
+  try { await api(`/api/v1/runs/${id}/replay`, { method: "POST" }); toast("已重新入队"); closeDetail(); refreshAll(true); }
+  catch (err) { toast(err.message, true); }
+}
+async function cancelRun(id) {
+  try { await api(`/api/v1/runs/${id}/cancel`, { method: "POST" }); toast("已取消"); closeDetail(); refreshAll(true); }
+  catch (err) { toast(err.message, true); }
+}
+
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.tab = btn.dataset.tab;
+    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+    document.getElementById("tab-" + state.tab).classList.add("active");
+    if (state.tab === "runs") loadRuns(true);
+  });
+});
+document.getElementById("detailOverlay").addEventListener("click", e => {
+  if (e.target.id === "detailOverlay") closeDetail();
+});
+document.getElementById("createOverlay").addEventListener("click", e => {
+  if (e.target.id === "createOverlay") closeCreate();
+});
+
+if (state.token) { boot(); } else { document.getElementById("login").style.display = "flex"; }
+</script>
+</body>
+</html>

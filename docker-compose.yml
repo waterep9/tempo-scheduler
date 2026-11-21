@@ -1,0 +1,68 @@
+# 一条命令拉起完整拓扑：PostgreSQL + API + 调度器 + 2 个执行器
+#   docker compose up --build
+# 控制台：http://localhost:8000    默认引导密钥：tempo-admin-token
+
+x-common-env: &common-env
+  DATABASE_URL: postgresql+psycopg://tempo:tempo@postgres:5432/tempo
+  TEMPO_BOOTSTRAP_TOKEN: ${TEMPO_BOOTSTRAP_TOKEN:-tempo-admin-token}
+  TEMPO_EMBEDDED_PLANNER: "0"
+  TEMPO_LEADER_TTL: "10"
+  TEMPO_TASK_LEASE_TTL: "30"
+  TEMPO_PLANNER_INTERVAL: "1"
+  TZ: Asia/Shanghai
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tempo
+      POSTGRES_PASSWORD: tempo
+      POSTGRES_DB: tempo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tempo -d tempo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      <<: *common-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+
+  scheduler:
+    build: .
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "app.scheduler"]
+
+  worker-1:
+    build: .
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "app.worker", "--id", "worker-1", "--capacity", "4"]
+
+  worker-2:
+    build: .
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "app.worker", "--id", "worker-2", "--capacity", "4"]
+
+volumes:
+  pgdata:
